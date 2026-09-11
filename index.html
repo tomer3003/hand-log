@@ -854,6 +854,13 @@ function currentAction(){
   const acts = state.actions[streetIndex(state.reveal)] || [];
   return state.done > 0 ? acts[state.done-1] : null;
 }
+// has anyone actually put a price on this street, as opposed to matching one?
+function hasWager(si){
+  return (state.actions[si] || []).some(a => {
+    const spec = ACTS[a.kind];
+    return spec && spec.amt && a.amt != null && a.kind !== 'call';
+  });
+}
 /* What it costs to call right now: the largest amount wagered on this street.
    Raise sizes are recorded as raises *to* a total, so the biggest one is the
    price. A call matches a price rather than setting one, so it is skipped.
@@ -867,6 +874,39 @@ function amountToCall(si){
   });
   if (top == null && si === 0) top = state.blinds.bb;
   return top;
+}
+
+/* Seats in the order they act on street si. Preflop opens under the gun — the
+   seat after the big blind — and postflop opens on the small blind, with the
+   button closing. Heads-up inverts it: one player is BTN and SB at once, so
+   they open preflop and the big blind opens every street after. */
+function actionOrder(si){
+  const n = state.seats;
+  const start = si === 0 ? (n === 2 ? 0 : 3 % n) : 1 % n;
+  const order = [];
+  for (let k = 0; k < n; k++) order.push((state.dealer + start + k) % n);
+  return order;
+}
+/* Whose turn it looks like: the next seat round from whoever acted last.
+   It keeps cycling, so a raise reopens the round the way it should. This is a
+   suggestion for the form, not a rule — any player can still be picked. */
+function nextToAct(si){
+  const acts = state.actions[si] || [];
+  const live = new Set(liveAt(si));
+  const folded = new Set();
+  acts.forEach(a => { if (a.kind === 'fold') folded.add(a.p); });
+  const queue = actionOrder(si).filter(i => live.has(i) && !folded.has(i));
+  if (!queue.length) return null;
+  if (!acts.length) return queue[0];
+  const at = queue.indexOf(acts[acts.length-1].p);
+  return at < 0 ? queue[0] : queue[(at + 1) % queue.length];
+}
+/* Call when there is a price to pay, otherwise check. The big blind facing no
+   raise is the odd one out: the price is their own blind, so they can check. */
+function defaultKind(si, p){
+  if (amountToCall(si) == null) return 'check';
+  if (si === 0 && !hasWager(0) && p != null && positionOf(p) === 'BB') return 'check';
+  return 'call';
 }
 
 // how far the hand can be run, given the cards actually entered
@@ -1360,21 +1400,29 @@ function syncAmtField(picked){
 actKindEl.addEventListener('change', () => syncAmtField(true));
 syncAmtField();
 
-function renderActions(){
+/* resuggest: move the form on to whoever is next to act, with the action they
+   most likely took. Passed when the hand changes shape or an action lands, but
+   not on a passive redraw, which would yank a half-made choice away. */
+function renderActions(resuggest){
   const si = streetIndex(state.reveal);
   const acts = state.actions[si] || [];
   document.getElementById('actStreet').textContent = PHASES[si].label;
 
-  // who can act: everyone still in the hand at this street
+  // who can act: everyone still in the hand at this street, in order of play
   const keep = actPlayerEl.value;
   actPlayerEl.textContent = '';
-  liveAt(si).forEach(i => {
+  const live = new Set(liveAt(si));
+  actionOrder(si).filter(i => live.has(i)).forEach(i => {
     const o = document.createElement('option');
     o.value = String(i);
     o.textContent = (state.players[i].name || 'Player ' + (i+1)) + ' (' + positionOf(i) + ')';
     actPlayerEl.appendChild(o);
   });
-  if (keep && actPlayerEl.querySelector('option[value="'+keep+'"]')) actPlayerEl.value = keep;
+  const next = nextToAct(si);
+  const kept = !resuggest && keep && actPlayerEl.querySelector('option[value="'+keep+'"]');
+  if (kept) actPlayerEl.value = keep;
+  else if (next != null) actPlayerEl.value = String(next);
+  if (resuggest) actKindEl.value = defaultKind(si, next);
 
   actListEl.textContent = '';
   acts.forEach((a, k) => {
@@ -1403,7 +1451,7 @@ function renderActions(){
   actEmptyEl.textContent = acts.length ? ''
     : 'No action logged for the ' + PHASES[si].label.toLowerCase() + ' yet.';
   document.getElementById('actClear').disabled = !acts.length;
-  syncAmtField();                    // the price to call moves with the street and the action
+  syncAmtField(resuggest);           // the price to call moves with the street and the action
 }
 
 function addAction(){
@@ -1424,7 +1472,7 @@ function addAction(){
   state.done = state.actions[si].length;       // show what you just added
   actAmtEl.value = '';
   if (kind === 'fold') render();               // folds change who has equity later
-  else { renderActions(); refreshView(); }
+  else { renderActions(true); refreshView(); }
 }
 
 function removeAction(si, k){
@@ -1432,7 +1480,7 @@ function removeAction(si, k){
   state.actions[si].splice(k, 1);
   if (state.done > state.actions[si].length) state.done = state.actions[si].length;
   if (wasFold) render();
-  else { renderActions(); refreshView(); }
+  else { renderActions(true); refreshView(); }
 }
 
 function clearStreetActions(){
@@ -1441,7 +1489,7 @@ function clearStreetActions(){
   state.actions[si] = [];
   state.done = 0;
   if (hadFold) render();
-  else { renderActions(); refreshView(); }
+  else { renderActions(true); refreshView(); }
 }
 
 document.getElementById('actAdd').addEventListener('click', addAction);
@@ -2096,7 +2144,7 @@ function render(){
   renderBoard();
   renderStepper();
   renderBlinds();
-  renderActions();
+  renderActions(true);               // the table changed, so whose turn it is may have too
   updatePods();
   renderTicker();
   calcPromise = recalc();

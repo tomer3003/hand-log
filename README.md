@@ -18,8 +18,12 @@ No build step, no dependencies, no server — one HTML file.
   the next one, and they price a preflop call.
 - **Action** — log what each player did on each street, as many actions per street as the
   hand needs (check, then re-raise after someone raised, and so on). Bet sizes are optional.
-  Choosing **Call** fills the amount in for you: the largest bet or raise on that street, or
-  the big blind preflop when nobody has raised. Type over it if the hand went differently.
+  The form follows the table: players are listed in the order they act — under the gun first
+  preflop, the small blind first on every street after — and it starts on whoever is next to
+  act, moving round as you add each one. The action defaults to **Call** with the amount
+  already filled in (the largest bet or raise on that street, or the big blind preflop), or
+  **Check** when there is nothing to call, which is what the big blind gets when nobody has
+  raised. All of it is a suggestion: pick any player, any action, type over any amount.
   Click any logged action to jump to that moment.
 - **Run hand** replays the hand move by move: it deals each street, then plays that street's
   actions one at a time, naming the player on the felt and highlighting their seat. The

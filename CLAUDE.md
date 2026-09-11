@@ -44,6 +44,14 @@ the big blind preflop. It feeds the action form's amount field through `syncAmtF
 which only overwrites what's in the field when the field still holds its own last suggestion —
 or when `picked` says the user just chose Call from the dropdown.
 
+**Action form suggestions.** `actionOrder(si)` is the seating order of play for a street
+(preflop opens UTG, later streets open on the SB; heads-up inverts both), `nextToAct(si)`
+walks it on from whoever acted last, and `defaultKind(si,p)` picks Call or Check. They only
+drive the form's defaults — any player and any action can still be picked, per the "record,
+not a rules engine" line below. `renderActions(resuggest)` applies them when `resuggest` is
+set: `render()` and adding, removing or clearing an action pass it, `refreshView()` does not,
+so replaying a hand never yanks a half-made choice out of the form.
+
 Cards are ints `0..51`, `card = rankIndex*4 + suit`, rankIndex `0..12` = 2..A,
 suit `0..3` = spades, hearts, diamonds, clubs. `rankOf`/`suitOf`/`cardText`/`cardPretty`
 convert.
@@ -132,9 +140,10 @@ Offered to the user and not taken up, so don't assume they're oversights:
   feature. Blinds are deliberately *not* posted as actions — the action list stays a record
   of what the players did.
 - **Date filtering / search** over the saved log. Fine while the log is short.
-- **Fold-aware action ordering.** The action editor lets you add any player in any order; it
-  doesn't enforce whose turn it is or that the sizing is legal. It's a record, not a rules
-  engine — that was intentional, but check before "fixing" it.
+- **Enforcing turn order and legal sizing.** The form now *suggests* whose turn it is and
+  what they probably did (see "Action form suggestions" above), but it still lets you add any
+  player in any order at any size. It's a record, not a rules engine — deliberately, so a
+  misremembered hand can still be written down. Suggest, don't enforce.
 - Hands sort by played date, so a future-dated hand sits at the top of the log.
 
 ## Style notes
