@@ -325,11 +325,19 @@ table.eq tr.dead td{color:var(--dim)}
 .actlist li.folds .verb{color:#d08080}
 .actlist li.dim{opacity:.32}
 .actlist li.now{background:rgba(200,150,63,.08)}
-.actlist li button{
-  margin-left:auto;color:var(--dim);font-size:12px;padding:2px 7px;
+.actlist li:not(.editing) button{
+  color:var(--dim);font-size:12px;padding:2px 7px;
   border:1px solid transparent;border-radius:3px;
 }
-.actlist li button:hover{color:var(--text);border-color:var(--line)}
+.actlist li:not(.editing) button:hover{color:var(--text);border-color:var(--line)}
+.actlist li .spacer{margin-left:auto}
+/* editing a logged action in place: the row turns into the same controls as the form below */
+.actlist li.editing{align-items:center;flex-wrap:wrap;background:rgba(200,150,63,.07)}
+.actlist li.editing select,.actlist li.editing input{
+  background:var(--panel);border:1px solid var(--line);border-radius:5px;
+  padding:6px 8px;font-size:13.5px;min-width:0;
+}
+.actlist li.editing input{width:104px;font-variant-numeric:tabular-nums}
 .actempty{color:var(--muted);font-size:13.5px;margin:0 0 14px}
 .actform{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .actform select,.actform input{background:var(--panel);border:1px solid var(--line);border-radius:5px;padding:7px 9px}
@@ -413,6 +421,8 @@ table.eq tr.dead td{color:var(--dim)}
   .picker-head .seg{margin-left:0!important;width:100%;order:3}
   .picker-head .seg button{flex:1;padding:8px 6px}
   .actform select,.actform input,.actform .btn{flex:1 1 46%;width:auto!important}
+  .actlist li.editing select,.actlist li.editing input,
+  .actlist li.editing .btn{flex:1 1 46%;width:auto!important}
   .actlist li{font-size:13.5px;gap:7px}
   .suits button{padding:20px 10px}
 }
@@ -1272,6 +1282,7 @@ function stopRun(){
 
 async function runHand(){
   if (running){ stopRun(); return; }
+  editing = null;                          // the replay redraws the list out from under it
   const target = dealtTo();
   running = true;
   const slow = !matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -1400,6 +1411,91 @@ function syncAmtField(picked){
 actKindEl.addEventListener('change', () => syncAmtField(true));
 syncAmtField();
 
+/* Editing a logged action in place. Without this a mistake in the middle of a
+   street could only be fixed by removing it and re-adding, which put it back at
+   the end of the street — so the whole street had to be redone. */
+let editing = null;                  // {si, k} of the action being edited
+
+function fillPlayerOptions(sel, si, chosen){
+  const live = new Set(liveAt(si));
+  if (chosen != null) live.add(chosen);   // keep whoever is on the action, even if now out
+  actionOrder(si).filter(i => live.has(i)).forEach(i => {
+    const o = document.createElement('option');
+    o.value = String(i);
+    o.textContent = (state.players[i].name || 'Player ' + (i+1)) + ' (' + positionOf(i) + ')';
+    sel.appendChild(o);
+  });
+}
+function cancelEdit(){
+  if (!editing) return;
+  editing = null;
+  renderActions();
+}
+function focusEdit(){
+  const el = actListEl.querySelector('li.editing select');
+  if (el) el.focus();
+}
+function editRow(si, k, a){
+  const frag = document.createDocumentFragment();
+
+  const who = document.createElement('select');
+  who.setAttribute('aria-label','Player');
+  fillPlayerOptions(who, si, a.p);
+  who.value = String(a.p);
+
+  const kind = document.createElement('select');
+  kind.setAttribute('aria-label','Action');
+  ACT_ORDER.forEach(key => {
+    const o = document.createElement('option');
+    o.value = key; o.textContent = ACTS[key].label;
+    kind.appendChild(o);
+  });
+  kind.value = a.kind;
+
+  const amt = document.createElement('input');
+  amt.type = 'text'; amt.inputMode = 'decimal';
+  amt.setAttribute('aria-label','Amount');
+  amt.value = ACTS[a.kind].amt && a.amt != null ? amtText(a.amt) : '';
+  const syncRow = () => {
+    const spec = ACTS[kind.value];
+    amt.disabled = !spec.amt;
+    amt.placeholder = spec.amt ? 'Amount' : '—';
+    if (!spec.amt) amt.value = '';
+  };
+  syncRow();
+  kind.addEventListener('change', syncRow);
+
+  const save = () => {
+    const p = parseInt(who.value, 10);
+    if (isNaN(p)) return;
+    let v = null;
+    if (ACTS[kind.value].amt){
+      const raw = amt.value.replace(/[,\s]/g,'');
+      if (raw !== ''){
+        const num = Number(raw);
+        if (!isFinite(num) || num < 0){ toast('That amount is not a number'); return; }
+        v = num;
+      }
+    }
+    const was = state.actions[si][k].kind;
+    state.actions[si][k] = {p, kind:kind.value, amt:v};
+    editing = null;
+    if (was === 'fold' || kind.value === 'fold') render();   // folds change later equity
+    else { renderActions(); refreshView(); }
+  };
+  amt.addEventListener('keydown', e => { if (e.key === 'Enter'){ e.preventDefault(); save(); } });
+
+  const ok = document.createElement('button');
+  ok.className = 'btn'; ok.textContent = 'Save';
+  ok.addEventListener('click', save);
+  const no = document.createElement('button');
+  no.className = 'btn quiet'; no.textContent = 'Cancel';
+  no.addEventListener('click', cancelEdit);
+
+  frag.append(who, kind, amt, ok, no);
+  return frag;
+}
+
 /* resuggest: move the form on to whoever is next to act, with the action they
    most likely took. Passed when the hand changes shape or an action lands, but
    not on a passive redraw, which would yank a half-made choice away. */
@@ -1408,16 +1504,12 @@ function renderActions(resuggest){
   const acts = state.actions[si] || [];
   document.getElementById('actStreet').textContent = PHASES[si].label;
 
+  if (editing && (editing.si !== si || editing.k >= acts.length)) editing = null;
+
   // who can act: everyone still in the hand at this street, in order of play
   const keep = actPlayerEl.value;
   actPlayerEl.textContent = '';
-  const live = new Set(liveAt(si));
-  actionOrder(si).filter(i => live.has(i)).forEach(i => {
-    const o = document.createElement('option');
-    o.value = String(i);
-    o.textContent = (state.players[i].name || 'Player ' + (i+1)) + ' (' + positionOf(i) + ')';
-    actPlayerEl.appendChild(o);
-  });
+  fillPlayerOptions(actPlayerEl, si, null);
   const next = nextToAct(si);
   const kept = !resuggest && keep && actPlayerEl.querySelector('option[value="'+keep+'"]');
   if (kept) actPlayerEl.value = keep;
@@ -1427,25 +1519,33 @@ function renderActions(resuggest){
   actListEl.textContent = '';
   acts.forEach((a, k) => {
     const li = document.createElement('li');
-    if (k >= state.done) li.classList.add('dim');
-    if (k === state.done-1) li.classList.add('now');
-    if (a.kind === 'fold') li.classList.add('folds');
-    const spec = ACTS[a.kind] || {verb:a.kind, amt:false};
     const n = document.createElement('span'); n.className='n'; n.textContent = (k+1)+'.';
-    const who = document.createElement('span');
-    who.textContent = state.players[a.p] ? (state.players[a.p].name || 'Player '+(a.p+1)) : 'Player';
-    const verb = document.createElement('span'); verb.className='verb'; verb.textContent = spec.verb;
-    const amt = document.createElement('span'); amt.className='amt';
-    amt.textContent = spec.amt && a.amt != null ? amtText(a.amt) : '';
-    const del = document.createElement('button');
-    del.textContent = 'Remove';
-    del.setAttribute('aria-label','Remove this action');
-    del.addEventListener('click', () => removeAction(si, k));
-    li.append(n, who, verb, amt, del);
-    li.addEventListener('click', e => {          // click an action to jump to it
-      if (e.target === del) return;
-      stopRun(); state.done = k+1; refreshView();
-    });
+    if (editing && editing.k === k){ li.classList.add('editing'); li.append(n, editRow(si, k, a)); }
+    else {
+      if (k >= state.done) li.classList.add('dim');
+      if (k === state.done-1) li.classList.add('now');
+      if (a.kind === 'fold') li.classList.add('folds');
+      const spec = ACTS[a.kind] || {verb:a.kind, amt:false};
+      const who = document.createElement('span');
+      who.textContent = state.players[a.p] ? (state.players[a.p].name || 'Player '+(a.p+1)) : 'Player';
+      const verb = document.createElement('span'); verb.className='verb'; verb.textContent = spec.verb;
+      const amt = document.createElement('span'); amt.className='amt';
+      amt.textContent = spec.amt && a.amt != null ? amtText(a.amt) : '';
+      const gap = document.createElement('span'); gap.className='spacer';
+      const ed = document.createElement('button');
+      ed.textContent = 'Edit';
+      ed.setAttribute('aria-label','Edit this action');
+      ed.addEventListener('click', () => { editing = {si, k}; renderActions(); focusEdit(); });
+      const del = document.createElement('button');
+      del.textContent = 'Remove';
+      del.setAttribute('aria-label','Remove this action');
+      del.addEventListener('click', () => removeAction(si, k));
+      li.append(n, who, verb, amt, gap, ed, del);
+      li.addEventListener('click', e => {         // click an action to jump to it
+        if (e.target.tagName === 'BUTTON') return;
+        stopRun(); state.done = k+1; refreshView();
+      });
+    }
     actListEl.appendChild(li);
   });
   actEmptyEl.textContent = acts.length ? ''
@@ -1476,6 +1576,7 @@ function addAction(){
 }
 
 function removeAction(si, k){
+  editing = null;                              // indexes shift under an open editor
   const wasFold = state.actions[si][k].kind === 'fold';
   state.actions[si].splice(k, 1);
   if (state.done > state.actions[si].length) state.done = state.actions[si].length;
@@ -1631,7 +1732,7 @@ document.getElementById('pickClose').addEventListener('click', closePicker);
 document.getElementById('pickClear').addEventListener('click', clearCard);
 scrim.addEventListener('click', e => { if (e.target === scrim) closePicker(); });
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape'){ closePicker(); closeText(); closeDrawer(); stopRun(); return; }
+  if (e.key === 'Escape'){ closePicker(); closeText(); closeDrawer(); cancelEdit(); stopRun(); return; }
   if (!scrim.hidden || !textScrim.hidden) return;
   const t = e.target.tagName;
   if (t === 'INPUT' || t === 'SELECT' || t === 'TEXTAREA') return;

@@ -24,7 +24,8 @@ No build step, no dependencies, no server — one HTML file.
   already filled in (the largest bet or raise on that street, or the big blind preflop), or
   **Check** when there is nothing to call, which is what the big blind gets when nobody has
   raised. All of it is a suggestion: pick any player, any action, type over any amount.
-  Click any logged action to jump to that moment.
+  Click any logged action to jump to that moment, **Edit** to correct one in place — player,
+  action or size, and it stays where it is in the street — or **Remove** to drop it.
 - **Run hand** replays the hand move by move: it deals each street, then plays that street's
   actions one at a time, naming the player on the felt and highlighting their seat. The
   street buttons jump to any point and the left/right arrow keys step one action at a time.

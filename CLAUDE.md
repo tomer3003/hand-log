@@ -52,6 +52,12 @@ not a rules engine" line below. `renderActions(resuggest)` applies them when `re
 set: `render()` and adding, removing or clearing an action pass it, `refreshView()` does not,
 so replaying a hand never yanks a half-made choice out of the form.
 
+**Editing an action in place.** `editing = {si,k}` turns that row into `editRow()`'s controls.
+It is deliberately closed rather than re-indexed whenever the list could shift beneath it — a
+removal, a street change, a replay, Escape — because a stale index would edit the wrong
+action. Saving a row that was or becomes a `fold` goes through `render()`, same rule as
+`addAction`.
+
 Cards are ints `0..51`, `card = rankIndex*4 + suit`, rankIndex `0..12` = 2..A,
 suit `0..3` = spades, hearts, diamonds, clubs. `rankOf`/`suitOf`/`cardText`/`cardPretty`
 convert.
