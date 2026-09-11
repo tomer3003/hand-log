@@ -909,15 +909,47 @@ function nextToAct(si){
   const live = new Set(liveAt(si));
   const folded = new Set();
   acts.forEach(a => { if (a.kind === 'fold') folded.add(a.p); });
-  const queue = actionOrder(si).filter(i => live.has(i) && !folded.has(i));
-  if (!queue.length) return null;
-  if (!acts.length) return queue[0];
-  const at = queue.indexOf(acts[acts.length-1].p);
-  return at < 0 ? queue[0] : queue[(at + 1) % queue.length];
+  // walk the seating order, which keeps this street's folders in place, so that
+  // the turn after a fold carries on round instead of starting over
+  const order = actionOrder(si).filter(i => live.has(i));
+  if (order.every(i => folded.has(i))) return null;
+  if (!acts.length) return order.find(i => !folded.has(i));
+  const at = order.indexOf(acts[acts.length-1].p);
+  if (at < 0) return order.find(i => !folded.has(i));
+  for (let k = 1; k <= order.length; k++){
+    const seat = order[(at + k) % order.length];
+    if (!folded.has(seat)) return seat;
+  }
+  return null;
 }
-/* Call when there is a price to pay, otherwise check. The big blind facing no
-   raise is the odd one out: the price is their own blind, so they can check. */
+/* Is the betting matched all the way round? True once the last player to put a
+   price up has been answered by everyone still in — the call has come back to
+   whoever raised to that number, so nobody owes anything and the street is done.
+   With nobody having wagered it takes a turn from every live player instead. */
+function roundClosed(si){
+  const acts = state.actions[si] || [];
+  if (!acts.length) return false;
+  const folded = new Set();
+  acts.forEach(a => { if (a.kind === 'fold') folded.add(a.p); });
+  const live = liveAt(si).filter(i => !folded.has(i));
+  if (live.length <= 1) return true;                  // everyone else has folded out
+  let ai = -1;                                        // the last action that set a price
+  for (let k = acts.length-1; k >= 0; k--){
+    const spec = ACTS[acts[k].kind];
+    if (spec && spec.amt && acts[k].amt != null && acts[k].kind !== 'call'){ ai = k; break; }
+  }
+  if (ai < 0){
+    const acted = new Set(acts.map(a => a.p));
+    return live.every(i => acted.has(i));
+  }
+  const answered = new Set(acts.slice(ai+1).map(a => a.p));
+  return live.every(i => i === acts[ai].p || answered.has(i));
+}
+/* Call when there is a price to pay, otherwise check. Two ways to owe nothing:
+   the betting has come all the way back round, or you are the big blind and
+   nobody has raised, so the price standing is your own blind. */
 function defaultKind(si, p){
+  if (roundClosed(si)) return 'check';
   if (amountToCall(si) == null) return 'check';
   if (si === 0 && !hasWager(0) && p != null && positionOf(p) === 'BB') return 'check';
   return 'call';

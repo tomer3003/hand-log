@@ -24,7 +24,9 @@ No build step, no dependencies, no server — one HTML file.
   act, moving round as you add each one. The action defaults to **Call** with the amount
   already filled in (the largest bet or raise on that street, or the big blind preflop), or
   **Check** when there is nothing to call, which is what the big blind gets when nobody has
-  raised. All of it is a suggestion: pick any player, any action, type over any amount.
+  raised, and what everyone gets once the betting has come back round to whoever raised last,
+  since the street is then settled. All of it is a suggestion: pick any player, any action,
+  type over any amount.
   Click any logged action to jump to that moment, **↑ ↓** to reorder one within its street,
   **Edit** to correct one in place — player, action or size, and it stays where it is — or
   **Remove** to drop it.

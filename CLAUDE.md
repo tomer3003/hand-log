@@ -46,7 +46,12 @@ or when `picked` says the user just chose Call from the dropdown.
 
 **Action form suggestions.** `actionOrder(si)` is the seating order of play for a street
 (preflop opens UTG, later streets open on the SB; heads-up inverts both), `nextToAct(si)`
-walks it on from whoever acted last, and `defaultKind(si,p)` picks Call or Check. They only
+walks it on from whoever acted last — through the *seating* order, so a fold keeps its place
+and the turn carries on round rather than starting over — and `defaultKind(si,p)` picks Call
+or Check. `roundClosed(si)` is what makes Check the default at the end of a street: it is true
+once everyone still in has answered the last player to put a price up (the call has come back
+round to whoever raised to that number), or, with nobody having wagered, once every live
+player has had a turn. They only
 drive the form's defaults — any player and any action can still be picked, per the "record,
 not a rules engine" line below. `renderActions(resuggest)` applies them when `resuggest` is
 set: `render()` and adding, removing or clearing an action pass it, `refreshView()` does not,
@@ -157,6 +162,9 @@ Offered to the user and not taken up, so don't assume they're oversights:
   what they probably did (see "Action form suggestions" above), but it still lets you add any
   player in any order at any size. It's a record, not a rules engine — deliberately, so a
   misremembered hand can still be written down. Suggest, don't enforce.
+- **Player names survive "New hand".** It looks like a reset that was missed; it is not.
+  The user was asked and wants it kept — you sit down with the same people all session, so
+  retyping six names per hand is the worse bug. Same for the blinds. Don't "fix" either.
 - Hands sort by played date, so a future-dated hand sits at the top of the log.
 
 ## Style notes
