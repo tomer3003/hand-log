@@ -169,6 +169,12 @@ Offered to the user and not taken up, so don't assume they're oversights:
 
 ## Style notes
 
+**`.felt` has no `overflow:hidden`.** It doesn't need one — `border-radius` already clips
+the background gradient to the oval on its own — and having one clipped the dealer badge
+(`.dealer`, `top:-9px` on the pod) for any seat near the top of the table, since the badge
+pokes out above its pod. If you're tempted to re-add it for some other reason, check the
+dealer badge at every seat count first.
+
 **Four-colour deck.** Spades black, hearts red, diamonds blue, clubs green. `SUIT_CLASS`
 maps a suit index to a class name and every card-rendering path uses it; there is no
 red/black split left, so don't reintroduce one. Each suit has two tokens: `--suit-<name>` for

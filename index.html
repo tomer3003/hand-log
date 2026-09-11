@@ -107,7 +107,9 @@ input[type=text]::placeholder{color:var(--dim)}
   background:
     radial-gradient(ellipse 58% 62% at 50% 44%, var(--felt-hi), var(--felt) 62%, #33473d 100%);
   box-shadow:inset 0 0 0 2px #2c3d34, inset 0 10px 30px -8px rgba(0,0,0,.55);
-  overflow:hidden;
+  /* no overflow:hidden: border-radius already clips the background to the oval on
+     its own, and clipping the box was cutting off the dealer badge for any seat
+     near the top, since it sits above its pod (top:-9px) */
 }
 .felt::after{ /* faint centre line ring, grounded like a real table print */
   content:"";position:absolute;inset:14% 9%;border:1px solid rgba(255,255,255,.055);
