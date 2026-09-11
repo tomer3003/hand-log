@@ -169,6 +169,11 @@ Offered to the user and not taken up, so don't assume they're oversights:
 
 ## Style notes
 
+The tab icon is an SVG data URI inline in `<head>` — two aces fanned, ivory on navy. It lives
+there rather than in a `favicon.svg` so the page stays a single self-contained file; don't
+extract it. Each card draws a navy plate a shade larger than itself first, which is what cuts
+the gap between the two cards and is the only reason the pair still reads at 16px.
+
 Match what's there: plain DOM, no dependencies, comments that explain *why* rather than what.
 The visual design is deliberate and not a default theme — navy ground, moss felt, brass
 accents, card ranks and equity figures in a serif so the numbers read as belonging to the
