@@ -169,6 +169,13 @@ Offered to the user and not taken up, so don't assume they're oversights:
 
 ## Style notes
 
+**Four-colour deck.** Spades black, hearts red, diamonds blue, clubs green. `SUIT_CLASS`
+maps a suit index to a class name and every card-rendering path uses it; there is no
+red/black split left, so don't reintroduce one. Each suit has two tokens: `--suit-<name>` for
+ink on the ivory card faces, and `--suit-<name>-lit` for cards written as text on the dark
+panels (the equity table and the saved log), where the same hue needs lifting to stay legible.
+Spades get a `-lit` value too, since near-black on navy is unreadable.
+
 The tab icon is an SVG data URI inline in `<head>` — two aces fanned, ivory on navy. It lives
 there rather than in a `favicon.svg` so the page stays a single self-contained file; don't
 extract it. Each card draws a navy plate a shade larger than itself first, which is what cuts

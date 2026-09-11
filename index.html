@@ -24,8 +24,17 @@
   --brass:#c8963f;
   --brass-dim:#8a6a30;
   --ivory:#f4ece0;
-  --suit-red:#b23b3b;
-  --suit-black:#22242c;
+  /* four-colour deck. The two on ivory card faces are deep enough to read as ink;
+     the -lit pair are the same hues lifted for the dark panels in the log and the
+     equity table, where the card faces aren't there to carry them. */
+  --suit-spade:#22242c;
+  --suit-heart:#b23b3b;
+  --suit-diamond:#2b5d8f;
+  --suit-club:#2c6a45;
+  --suit-spade-lit:#aab0c0;
+  --suit-heart-lit:#d97070;
+  --suit-diamond-lit:#6ea3d6;
+  --suit-club-lit:#6cb98c;
   --text:#e9e7e1;
   --muted:#9498a8;
   --dim:#666c80;
@@ -127,8 +136,10 @@ input[type=text]::placeholder{color:var(--dim)}
 }
 .card .r{font-size:21px;font-weight:600}
 .card .s{font-size:15px;margin-top:1px}
-.card.red{color:var(--suit-red)}
-.card.black{color:var(--suit-black)}
+.card.spade{color:var(--suit-spade)}
+.card.heart{color:var(--suit-heart)}
+.card.diamond{color:var(--suit-diamond)}
+.card.club{color:var(--suit-club)}
 .card.empty{
   background:rgba(255,255,255,.05);
   box-shadow:inset 0 0 0 1px rgba(255,255,255,.16);
@@ -262,8 +273,10 @@ table.eq tr.dead td{color:var(--dim)}
   display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1;
 }
 .deck button .s{font-size:10px}
-.deck button.red{color:var(--suit-red)}
-.deck button.black{color:var(--suit-black)}
+.deck button.spade{color:var(--suit-spade)}
+.deck button.heart{color:var(--suit-heart)}
+.deck button.diamond{color:var(--suit-diamond)}
+.deck button.club{color:var(--suit-club)}
 .deck button:disabled{background:#2a3040;color:#4c5468;box-shadow:none}
 .deck button:hover:not(:disabled){transform:translateY(-2px)}
 
@@ -301,7 +314,7 @@ table.eq tr.dead td{color:var(--dim)}
 .steplabel{font-size:13px;color:var(--muted);margin-bottom:10px}
 .ranks{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
 .ranks button{
-  aspect-ratio:1;border-radius:5px;background:var(--ivory);color:var(--suit-black);
+  aspect-ratio:1;border-radius:5px;background:var(--ivory);color:var(--suit-spade);
   font-family:var(--serif);font-size:21px;font-weight:600;
 }
 .ranks button:disabled{background:#2a3040;color:#4c5468}
@@ -313,8 +326,10 @@ table.eq tr.dead td{color:var(--dim)}
   display:flex;align-items:center;justify-content:center;gap:9px;
 }
 .suits button small{font-family:var(--sans);font-size:12.5px;color:#5b6070;font-weight:600}
-.suits button.red{color:var(--suit-red)}
-.suits button.black{color:var(--suit-black)}
+.suits button.spade{color:var(--suit-spade)}
+.suits button.heart{color:var(--suit-heart)}
+.suits button.diamond{color:var(--suit-diamond)}
+.suits button.club{color:var(--suit-club)}
 .suits button:disabled{background:#2a3040;color:#4c5468}
 .suits button:disabled small{color:#4c5468}
 .suits button:hover:not(:disabled){transform:translateY(-2px)}
@@ -389,7 +404,12 @@ table.eq tr.dead td{color:var(--dim)}
 .entry-top h4{margin:0;font-size:14.5px;font-weight:600}
 .entry-top time{margin-left:auto;color:var(--dim);font-size:12px;white-space:nowrap}
 .entry .cards{font-family:var(--serif);font-size:15px;margin:5px 0 3px}
-.entry .cards .red{color:#d97070}
+/* cards written as text on a dark panel, so they take the lifted suit colours */
+.pip.spade{color:var(--suit-spade-lit)}
+.pip.heart{color:var(--suit-heart-lit)}
+.pip.diamond{color:var(--suit-diamond-lit)}
+.pip.club{color:var(--suit-club-lit)}
+.pip.none{color:var(--dim)}
 .entry .meta{color:var(--muted);font-size:12.5px}
 .entry-actions{display:flex;gap:6px;margin-top:8px}
 .entry-actions button{font-size:12px;padding:3px 8px;border:1px solid var(--line);border-radius:4px;color:var(--muted)}
@@ -621,7 +641,7 @@ table.eq tr.dead td{color:var(--dim)}
 const RANKS = ['2','3','4','5','6','7','8','9','T','J','Q','K','A'];
 const SUITS = ['\u2660','\u2665','\u2666','\u2663'];
 const SUIT_LETTER = ['s','h','d','c'];
-const isRed = s => s === 1 || s === 2;
+const SUIT_CLASS = ['spade','heart','diamond','club'];   // four-colour deck
 const rankOf = c => c >> 2;
 const suitOf = c => c & 3;
 const cardText = c => RANKS[rankOf(c)] + SUIT_LETTER[suitOf(c)];
@@ -997,7 +1017,7 @@ function cardButton(c, {small=false, onClick}={}){
     b.classList.add('empty');
     b.setAttribute('aria-label','Empty card slot, click to pick a card');
   } else {
-    b.classList.add(isRed(suitOf(c)) ? 'red' : 'black');
+    b.classList.add(SUIT_CLASS[suitOf(c)]);
     b.innerHTML = '<span class="r">'+RANKS[rankOf(c)]+'</span><span class="s">'+SUITS[suitOf(c)]+'</span>';
     b.setAttribute('aria-label', cardText(c));
   }
@@ -1195,8 +1215,7 @@ function renderEquityTable(message){
     pos.className = 'pos'; pos.textContent = positionOf(i);
     const cs = document.createElement('span');
     cs.className = 'cs';
-    cs.innerHTML = p.cards.map(c => c==null ? '<span style="color:#666c80">··</span>'
-      : '<span class="'+(isRed(suitOf(c))?'red':'')+'" style="'+(isRed(suitOf(c))?'color:#d97070':'')+'">'+cardPretty(c)+'</span>').join(' ');
+    cs.innerHTML = p.cards.map(c => c==null ? '<span class="pip none">··</span>' : prettyHTML(c)).join(' ');
     who.append(nm, pos, cs);
     td0.appendChild(who);
     tr.appendChild(td0);
@@ -1729,7 +1748,7 @@ function renderDeck(){
     for (let r=12;r>=0;r--){
       const c = r*4 + s;
       const b = document.createElement('button');
-      b.className = isRed(s) ? 'red' : 'black';
+      b.className = SUIT_CLASS[s];
       b.innerHTML = '<span>'+RANKS[r]+'</span><span class="s">'+SUITS[s]+'</span>';
       b.setAttribute('aria-label', cardText(c));
       if (used.has(c) && c !== current) b.disabled = true;
@@ -1772,7 +1791,7 @@ function renderSuits(r){
   for (let s=0;s<4;s++){
     const c = r*4 + s;
     const b = document.createElement('button');
-    b.className = isRed(s) ? 'red' : 'black';
+    b.className = SUIT_CLASS[s];
     b.innerHTML = SUITS[s] + '<small>' + SUIT_NAMES[s] + '</small>';
     b.setAttribute('aria-label', RANKS[r] + ' of ' + SUIT_NAMES[s]);
     if (used.has(c) && c !== current) b.disabled = true;
@@ -2087,8 +2106,7 @@ function renderLog(msg){
   });
 }
 function prettyHTML(c){
-  const col = isRed(suitOf(c)) ? 'color:#d97070' : '';
-  return '<span style="'+col+'">'+cardPretty(c)+'</span>';
+  return '<span class="pip '+SUIT_CLASS[suitOf(c)]+'">'+cardPretty(c)+'</span>';
 }
 
 function handToText(h){

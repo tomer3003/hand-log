@@ -10,7 +10,8 @@ No build step, no dependencies, no server — one HTML file.
 - **Seats** — 2 to 9. Each pod has a **Dealer** button that moves the button and re-labels
   every position around the table. **Fold** removes a player from the equity maths.
 - **Cards** — click any slot, on the felt or in a pod, to pick a card. Cards already in play
-  are greyed out. The **×** beside a player's cards clears both at once; it only appears when
+  are greyed out. The deck is four-coloured: spades black, hearts red, diamonds blue, clubs
+  green, so a flush is obvious at a glance. The **×** beside a player's cards clears both at once; it only appears when
   they are holding something. Player names are editable in place, and renaming is retroactive
   — every action already logged, on every street, takes the new name.
 - **Card picker style** — a toggle in the picker header switches between showing all 52
