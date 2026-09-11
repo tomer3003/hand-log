@@ -330,6 +330,8 @@ table.eq tr.dead td{color:var(--dim)}
   border:1px solid transparent;border-radius:3px;
 }
 .actlist li:not(.editing) button:hover{color:var(--text);border-color:var(--line)}
+.actlist li:not(.editing) button:disabled{opacity:.25}
+.actlist li:not(.editing) button:disabled:hover{color:var(--dim);border-color:transparent}
 .actlist li .spacer{margin-left:auto}
 /* editing a logged action in place: the row turns into the same controls as the form below */
 .actlist li.editing{align-items:center;flex-wrap:wrap;background:rgba(200,150,63,.07)}
@@ -423,7 +425,9 @@ table.eq tr.dead td{color:var(--dim)}
   .actform select,.actform input,.actform .btn{flex:1 1 46%;width:auto!important}
   .actlist li.editing select,.actlist li.editing input,
   .actlist li.editing .btn{flex:1 1 46%;width:auto!important}
-  .actlist li{font-size:13.5px;gap:7px}
+  /* four buttons plus a name will not fit one phone line, so let the row wrap */
+  .actlist li{font-size:13.5px;gap:7px;flex-wrap:wrap}
+  .actlist li:not(.editing) button{padding:4px 8px}
   .suits button{padding:20px 10px}
 }
 
@@ -997,7 +1001,12 @@ function renderSeats(){
     const name = document.createElement('input');
     name.className = 'pname'; name.type='text'; name.value = p.name;
     name.setAttribute('aria-label','Player name');
-    name.addEventListener('input', () => { p.name = name.value; renderEquityLabels(); });
+    // a rename is retroactive: everything that shows a name reads it from state,
+    // so refresh them all. Not render(), which would rebuild this very input.
+    name.addEventListener('input', () => {
+      p.name = name.value;
+      renderEquityLabels(); renderActions(); renderTicker();
+    });
     const pos = document.createElement('span');
     pos.className = 'pos'; pos.textContent = positionOf(i);
     head.append(name, pos);
@@ -1481,7 +1490,7 @@ function editRow(si, k, a){
     state.actions[si][k] = {p, kind:kind.value, amt:v};
     editing = null;
     if (was === 'fold' || kind.value === 'fold') render();   // folds change later equity
-    else { renderActions(); refreshView(); }
+    else { renderActions(true); refreshView(); }             // whose turn it is may have moved
   };
   amt.addEventListener('keydown', e => { if (e.key === 'Enter'){ e.preventDefault(); save(); } });
 
@@ -1532,15 +1541,19 @@ function renderActions(resuggest){
       const amt = document.createElement('span'); amt.className='amt';
       amt.textContent = spec.amt && a.amt != null ? amtText(a.amt) : '';
       const gap = document.createElement('span'); gap.className='spacer';
-      const ed = document.createElement('button');
-      ed.textContent = 'Edit';
-      ed.setAttribute('aria-label','Edit this action');
-      ed.addEventListener('click', () => { editing = {si, k}; renderActions(); focusEdit(); });
-      const del = document.createElement('button');
-      del.textContent = 'Remove';
-      del.setAttribute('aria-label','Remove this action');
-      del.addEventListener('click', () => removeAction(si, k));
-      li.append(n, who, verb, amt, gap, ed, del);
+      const rowBtn = (label, aria, fn, off) => {
+        const b = document.createElement('button');
+        b.textContent = label;
+        b.setAttribute('aria-label', aria);
+        if (off) b.disabled = true; else b.addEventListener('click', fn);
+        return b;
+      };
+      const up = rowBtn('↑', 'Move this action earlier', () => moveAction(si, k, -1), k === 0);
+      const down = rowBtn('↓', 'Move this action later', () => moveAction(si, k, 1), k === acts.length-1);
+      const ed = rowBtn('Edit', 'Edit this action',
+        () => { editing = {si, k}; renderActions(); focusEdit(); });
+      const del = rowBtn('Remove', 'Remove this action', () => removeAction(si, k));
+      li.append(n, who, verb, amt, gap, up, down, ed, del);
       li.addEventListener('click', e => {         // click an action to jump to it
         if (e.target.tagName === 'BUTTON') return;
         stopRun(); state.done = k+1; refreshView();
@@ -1573,6 +1586,20 @@ function addAction(){
   actAmtEl.value = '';
   if (kind === 'fold') render();               // folds change who has equity later
   else { renderActions(true); refreshView(); }
+}
+
+/* Reordering never changes equity: liveAt() only counts folds on *earlier*
+   streets, and shuffling a street does not change that set. So this stays on
+   the light path even when a fold moves. */
+function moveAction(si, k, dir){
+  const acts = state.actions[si];
+  const j = k + dir;
+  if (j < 0 || j >= acts.length) return;
+  editing = null;                              // indexes shift under an open editor
+  const held = acts[k]; acts[k] = acts[j]; acts[j] = held;
+  if (state.done === k+1) state.done = j+1;    // keep the replay marker on the same action
+  else if (state.done === j+1) state.done = k+1;
+  renderActions(true); refreshView();
 }
 
 function removeAction(si, k){

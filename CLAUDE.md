@@ -56,7 +56,14 @@ so replaying a hand never yanks a half-made choice out of the form.
 It is deliberately closed rather than re-indexed whenever the list could shift beneath it — a
 removal, a street change, a replay, Escape — because a stale index would edit the wrong
 action. Saving a row that was or becomes a `fold` goes through `render()`, same rule as
-`addAction`.
+`addAction`. `moveAction()` reorders within a street and deliberately stays on the light path
+even for a fold: `liveAt()` counts folds on *earlier* streets only, so shuffling one street
+cannot change any equity.
+
+**Names are read at render time**, never copied into actions, so a rename only needs a
+redraw to become retroactive. The pod's name input fires `renderEquityLabels()`,
+`renderActions()` and `renderTicker()` — not `render()`, which would rebuild the very input
+being typed into and lose focus. If you add somewhere a name is shown, refresh it there too.
 
 Cards are ints `0..51`, `card = rankIndex*4 + suit`, rankIndex `0..12` = 2..A,
 suit `0..3` = spades, hearts, diamonds, clubs. `rankOf`/`suitOf`/`cardText`/`cardPretty`
