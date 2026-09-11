@@ -58,6 +58,9 @@ header.top{display:flex;align-items:flex-end;gap:18px;flex-wrap:wrap;margin-bott
 
 .field{display:flex;align-items:center;gap:7px}
 .field label{color:var(--muted);font-size:13px}
+.blinds{display:flex;align-items:center;gap:5px}
+.blinds input{width:62px;text-align:right;font-variant-numeric:tabular-nums}
+.blinds .slash{color:var(--dim)}
 input[type=text],input[type=datetime-local],input[type=date],select{
   background:var(--panel);border:1px solid var(--line);border-radius:5px;
   padding:7px 9px;min-width:0;
@@ -456,6 +459,14 @@ table.eq tr.dead td{color:var(--dim)}
         <option selected>6</option><option>7</option><option>8</option><option>9</option>
       </select>
     </div>
+    <div class="field">
+      <label for="sbIn">Blinds</label>
+      <span class="blinds">
+        <input type="text" id="sbIn" inputmode="decimal" placeholder="SB" aria-label="Small blind">
+        <span class="slash">/</span>
+        <input type="text" id="bbIn" inputmode="decimal" placeholder="BB" aria-label="Big blind">
+      </span>
+    </div>
     <button class="btn quiet" id="clearBtn">New hand</button>
     <button class="btn" id="logBtn">Saved hands</button>
   </div>
@@ -785,6 +796,13 @@ function actionText(a, players){
 }
 
 let state = null;
+/* Blinds are a record, not a rules engine: nothing posts them as actions.
+   They label the stakes and set what a preflop call is worth. */
+function normaliseBlinds(b){
+  const one = v => (v == null || v === '' || !isFinite(Number(v)) || Number(v) < 0)
+    ? null : Number(v);
+  return b ? {sb: one(b.sb), bb: one(b.bb)} : {sb: null, bb: null};
+}
 function blankState(n){
   return {
     seats: n,
@@ -792,6 +810,7 @@ function blankState(n){
     reveal: 0,                       // board cards turned face up: 0..5
     done: 0,                         // actions played so far on the current street
     actions: [[],[],[],[]],          // per street, in order
+    blinds: normaliseBlinds(prefs.blinds),
     board: [null,null,null,null,null],
     players: Array.from({length:n}, (_,i) => ({
       name: 'Player ' + (i+1), cards:[null,null], folded:false
@@ -834,6 +853,20 @@ function outByNow(){
 function currentAction(){
   const acts = state.actions[streetIndex(state.reveal)] || [];
   return state.done > 0 ? acts[state.done-1] : null;
+}
+/* What it costs to call right now: the largest amount wagered on this street.
+   Raise sizes are recorded as raises *to* a total, so the biggest one is the
+   price. A call matches a price rather than setting one, so it is skipped.
+   Preflop with nothing raised yet, the price is the big blind. */
+function amountToCall(si){
+  let top = null;
+  (state.actions[si] || []).forEach(a => {
+    const spec = ACTS[a.kind];
+    if (!spec || !spec.amt || a.amt == null || a.kind === 'call') return;
+    if (top == null || a.amt > top) top = a.amt;
+  });
+  if (top == null && si === 0) top = state.blinds.bb;
+  return top;
 }
 
 // how far the hand can be run, given the cards actually entered
@@ -1304,13 +1337,27 @@ ACT_ORDER.forEach(k => {
   o.value = k; o.textContent = ACTS[k].label;
   actKindEl.appendChild(o);
 });
-function syncAmtField(){
+let suggestedAmt = '';   // what this last filled in, so a typed-over amount survives
+function syncAmtField(picked){
   const spec = ACTS[actKindEl.value];
   actAmtEl.disabled = !spec.amt;
-  if (!spec.amt) actAmtEl.value = '';
   actAmtEl.placeholder = spec.amt ? 'Amount' : '—';
+  if (!spec.amt){ actAmtEl.value = ''; suggestedAmt = ''; return; }
+
+  const typedOver = actAmtEl.value !== '' && actAmtEl.value !== suggestedAmt;
+  if (actKindEl.value !== 'call'){
+    if (!typedOver) actAmtEl.value = '';        // drop a stale call suggestion
+    suggestedAmt = '';
+    return;
+  }
+  // picking Call is a request for the price, so it wins over an amount typed for
+  // some other action; a passive redraw leaves anything typed alone
+  if (!state || (typedOver && !picked)) return;  // no state on the first run, before the table is built
+  const due = amountToCall(streetIndex(state.reveal));
+  suggestedAmt = due == null ? '' : amtText(due);
+  actAmtEl.value = suggestedAmt;
 }
-actKindEl.addEventListener('change', syncAmtField);
+actKindEl.addEventListener('change', () => syncAmtField(true));
 syncAmtField();
 
 function renderActions(){
@@ -1356,6 +1403,7 @@ function renderActions(){
   actEmptyEl.textContent = acts.length ? ''
     : 'No action logged for the ' + PHASES[si].label.toLowerCase() + ' yet.';
   document.getElementById('actClear').disabled = !acts.length;
+  syncAmtField();                    // the price to call moves with the street and the action
 }
 
 function addAction(){
@@ -1599,7 +1647,7 @@ async function persist(){
 
 /* ---------- settings ---------- */
 const PREFS_KEY = 'hand-log-prefs-v1';
-let prefs = {pickerMode:'all'};
+let prefs = {pickerMode:'all', blinds:{sb:null, bb:null}};
 async function loadPrefs(){
   let raw = null;
   try { raw = await store.get(PREFS_KEY); } catch (e){ raw = null; }
@@ -1607,6 +1655,7 @@ async function loadPrefs(){
   try {
     const p = JSON.parse(raw);
     if (p && (p.pickerMode === 'all' || p.pickerMode === 'two')) prefs.pickerMode = p.pickerMode;
+    if (p && p.blinds) prefs.blinds = normaliseBlinds(p.blinds);
   } catch (e){ /* keep defaults */ }
 }
 async function savePrefs(){
@@ -1665,6 +1714,7 @@ function snapshot(){
     savedAt: new Date().toISOString(),
     seats: state.seats,
     dealer: state.dealer,
+    blinds: {sb: state.blinds.sb, bb: state.blinds.bb},
     board: state.board.slice(),
     players: state.players.map(p => ({name:p.name, cards:p.cards.slice(), folded:p.folded})),
     actions: state.actions.map(list => list.map(a => ({p:a.p, kind:a.kind, amt:a.amt}))),
@@ -1704,6 +1754,7 @@ function loadHand(h){
   stopRun();
   state = {
     seats: h.seats, dealer: h.dealer, reveal: 0, done: 0,
+    blinds: normaliseBlinds(h.blinds),          // hands saved before blinds existed have none
     board: h.board.slice(),
     players: h.players.map(p => ({name:p.name, cards:p.cards.slice(), folded:!!p.folded})),
     actions: normaliseActions(h.actions, h.players.length)
@@ -1808,7 +1859,9 @@ function prettyHTML(c){
 function handToText(h){
   const lines = [];
   lines.push(h.name + '  (' + new Date(playedOf(h)).toLocaleString() + ')');
-  lines.push(h.seats + '-handed');
+  const bl = normaliseBlinds(h.blinds);
+  lines.push(h.seats + '-handed' +
+    (bl.sb != null && bl.bb != null ? '  ' + amtText(bl.sb) + '/' + amtText(bl.bb) : ''));
   h.players.forEach((p,i) => {
     const pos = POS[h.seats][(i - h.dealer + h.seats) % h.seats];
     const cs = p.cards.map(c => c==null ? '??' : cardText(c)).join(' ');
@@ -1942,6 +1995,7 @@ async function importLog(text){
     if (!h.seats) h.seats = h.players.length;
     if (h.dealer == null) h.dealer = 0;
     if (!h.equity) h.equity = {};
+    h.blinds = normaliseBlinds(h.blinds);
     h.actions = normaliseActions(h.actions, h.players.length);
     hands.push(h); have.add(h.id); added++;
   });
@@ -1978,6 +2032,29 @@ function toast(msg){
 /* ============================================================
    Wiring
    ============================================================ */
+/* ---------- blinds ---------- */
+const sbIn = document.getElementById('sbIn');
+const bbIn = document.getElementById('bbIn');
+function renderBlinds(){
+  // leave the field alone while it is being typed into, or the grouping moves the caret
+  if (document.activeElement !== sbIn) sbIn.value = amtText(state.blinds.sb);
+  if (document.activeElement !== bbIn) bbIn.value = amtText(state.blinds.bb);
+}
+function readBlinds(){
+  const clean = el => el.value.replace(/[,\s]/g,'');
+  state.blinds = normaliseBlinds({sb: clean(sbIn), bb: clean(bbIn)});
+  syncAmtField();                    // a preflop call is priced off the big blind
+}
+[sbIn, bbIn].forEach(el => {
+  el.addEventListener('input', readBlinds);
+  el.addEventListener('change', () => {         // committed: tidy the formatting, remember the stakes
+    readBlinds();
+    renderBlinds();
+    prefs.blinds = {sb: state.blinds.sb, bb: state.blinds.bb};
+    savePrefs();
+  });
+});
+
 document.getElementById('seats').addEventListener('change', e => {
   stopRun();
   const n = +e.target.value;
@@ -1992,7 +2069,9 @@ document.getElementById('seats').addEventListener('change', e => {
 document.getElementById('clearBtn').addEventListener('click', () => {
   stopRun();
   const names = state.players.map(p => p.name);
+  const blinds = state.blinds;                  // same table, same stakes
   state = blankState(state.seats);
+  state.blinds = blinds;
   state.players.forEach((p,i) => p.name = names[i] || p.name);
   document.getElementById('handName').value = '';
   setPlayedNow();
@@ -2016,6 +2095,7 @@ function render(){
   renderSeats();
   renderBoard();
   renderStepper();
+  renderBlinds();
   renderActions();
   updatePods();
   renderTicker();
@@ -2030,6 +2110,7 @@ try {
   state.players[3].name = 'Villain';
   state.players[3].cards = [42, 38];              // Q♦ J♦
   [1,2,4,5].forEach(i => state.players[i].folded = true);
+  state.blinds = {sb:50, bb:100};                 // the raise to 300 below is 3x
   state.board = [46, 22, 3, 2, 51];               // K♦ 7♦ 2♣ | 2♦ | A♣
   state.reveal = 0;                               // dealt face-down, waiting on Run hand
   state.actions = [

@@ -33,10 +33,16 @@ state = {
   reveal,    // board cards face up: 0..5. Also encodes the street (see streetIndex)
   done,      // actions played so far on the CURRENT street
   actions,   // [[],[],[],[]] one array per street, in order
+  blinds,    // {sb, bb} either may be null; metadata, never posted as actions
   board,     // [5] card ints or null
   players    // [{name, cards:[2], folded}]
 }
 ```
+
+`amountToCall(si)` prices a call off the biggest bet or raise on that street, falling back to
+the big blind preflop. It feeds the action form's amount field through `syncAmtField(picked)`,
+which only overwrites what's in the field when the field still holds its own last suggestion —
+or when `picked` says the user just chose Call from the dropdown.
 
 Cards are ints `0..51`, `card = rankIndex*4 + suit`, rankIndex `0..12` = 2..A,
 suit `0..3` = spades, hearts, diamonds, clubs. `rankOf`/`suitOf`/`cardText`/`cardPretty`
@@ -121,8 +127,10 @@ test, and the 9.1% is exactly 4 outs out of 44.
 
 Offered to the user and not taken up, so don't assume they're oversights:
 
-- **Pot and stack tracking.** Actions carry an optional size but nothing sums a pot,
-  computes pot odds, or tracks stacks. This is the most obvious next feature.
+- **Pot and stack tracking.** Actions carry an optional size and the blinds are known, but
+  nothing sums a pot, computes pot odds, or tracks stacks. This is the most obvious next
+  feature. Blinds are deliberately *not* posted as actions — the action list stays a record
+  of what the players did.
 - **Date filtering / search** over the saved log. Fine while the log is short.
 - **Fold-aware action ordering.** The action editor lets you add any player in any order; it
   doesn't enforce whose turn it is or that the sizing is legal. It's a record, not a rules

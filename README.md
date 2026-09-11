@@ -14,8 +14,12 @@ No build step, no dependencies, no server — one HTML file.
 - **Card picker style** — a toggle in the picker header switches between showing all 52
   cards at once and a two-step flow: choose the rank, then the suit. The two-step layout has
   much larger targets, which suits a phone. The choice is remembered.
+- **Blinds** — set the stakes in the header. They are saved with the hand and remembered for
+  the next one, and they price a preflop call.
 - **Action** — log what each player did on each street, as many actions per street as the
   hand needs (check, then re-raise after someone raised, and so on). Bet sizes are optional.
+  Choosing **Call** fills the amount in for you: the largest bet or raise on that street, or
+  the big blind preflop when nobody has raised. Type over it if the hand went differently.
   Click any logged action to jump to that moment.
 - **Run hand** replays the hand move by move: it deals each street, then plays that street's
   actions one at a time, naming the player on the felt and highlighting their seat. The
